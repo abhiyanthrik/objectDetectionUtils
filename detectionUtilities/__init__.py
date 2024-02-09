@@ -1,13 +1,76 @@
 import os
 import shutil
 import xml.etree.ElementTree as ETree
+from typing import List
+import random
 from xml.etree.ElementTree import Element
+classes = ['pistol', 'knife']
 
-classes = ['person']
+
+def create_dataset(root_dir: str, data_format: str = 'coco', splits: (float, float) = (0.2, 0.05)):
+    image_extensions = ['.jpg', '.jpeg', '.JPG', '.JPEG', '.png', '.PNG']
+    label_ext = '.xml' if data_format == 'coco' else '.txt' if data_format == 'yolo' else None
+    if label_ext is None:
+        print('Unknown Dataset to split...\nTerminating the operation!!!')
+        return
+    dataset_dir = f"{root_dir}-dataset"
+    print(f"Creating {dataset_dir}")
+    os.makedirs(dataset_dir, exist_ok=True)
+    files = os.listdir(os.path.join(root_dir, "images"))
+    files = [os.path.splitext(file)[0] for file in files]
+    for _ in range(25):
+        random.shuffle(files)
+
+    data_size = len(files)
+    train_till = int(data_size * (1 - sum(splits)))
+    valid_till = int(train_till + (data_size * splits[0]))
+    dataset_splits = {
+        "train": files[:train_till],
+        "valid": files[train_till:valid_till],
+        "test": files[valid_till:]
+    }
+    for split in dataset_splits:
+        split_dir = os.path.join(dataset_dir, split)
+        print(f"\tCreating {split_dir}")
+        for file in dataset_splits[split]:
+            image_path = ''
+            for image_ext in image_extensions:
+                image_name = f"{file}{image_ext}"
+                image_path = os.path.join(root_dir, "images", image_name)
+                if os.path.exists(image_path):
+                    break
+            if not os.path.exists(image_path):
+                print(f"\t\tSkipping {image_path}...\n\t\tFile not exists!!!")
+                continue
+            label_name = f"{file}{label_ext}"
+            label_path = os.path.join(root_dir, "labels", label_name)
+            image_dest, label_dest = [os.path.join(split_dir, dest) for dest in ["images", "labels"]]
+            for dest in [image_dest, label_dest]:
+                if not os.path.exists(dest):
+                    os.makedirs(dest, exist_ok=True)
+            print(f"\t\tCopying: {image_path}")
+            shutil.copy2(image_path, image_dest)
+            print(f"\t\tCopying: {label_path}")
+            shutil.copy2(label_path, label_dest)
 
 
-def merge_data(src_path, dst_path):
-    pass
+def merge_data(src_paths: List[str], dst_path: str):
+    if not os.path.exists(dst_path):
+        os.makedirs(dst_path)
+    if os.listdir(dst_path):
+        print(f'{dst_path} Not empty!!!\nChoose a different location')
+        return
+    for src_path in src_paths:
+        print(f"Copying {src_path}")
+        for root, dirs, files in os.walk(src_path):
+            for file in files:
+                file_abs_path = os.path.join(root, file)
+                file_rel_path = file_abs_path.replace(src_path+'/', '')
+                dest_path = "/".join(os.path.join(dst_path, file_rel_path).split('/')[:-1])
+                if not os.path.exists(dest_path):
+                    os.makedirs(dest_path)
+                print(f"\tCopying {file_abs_path}")
+                shutil.copy2(file_abs_path, dest_path)
 
 
 def copy_files(source_dir, dest_dir):
@@ -67,6 +130,7 @@ def move_content(src_dir, dest_dir):
 
 def voc2yolo(src_dir, dest_dir):
     for subdirectory in os.listdir(src_dir):
+        print(f"Working on: {subdirectory}")
         src_split = os.path.join(src_dir, subdirectory)
         split_name = src_split.replace(src_dir, '')
         dst_split = dest_dir + split_name
