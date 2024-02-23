@@ -142,3 +142,15 @@ def voc2yolo(src_dir, dest_dir):
                 copy_files(src_content_path, dst_content_path)
             elif 'label' in content.lower():
                 move_content(src_content_path, dst_content_path)
+
+
+def overlay_boxes(image, bounding_boxes):
+    pass
+
+
+def get_box_from_yolo(image_src, label_src):
+    pass
+
+
+def draw_bounding_boxes(image_path, label_path):
+    pass
