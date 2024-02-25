@@ -150,7 +150,6 @@ def voc2yolo(src_dir, dest_dir):
 def seg_to_bbox(seg_info):
     class_id, points = seg_info[0], seg_info[1:]
     points = [float(p) for p in points]
-    # print(points)
     x_min, y_min, x_max, y_max = min(points[0::2]), min(points[1::2]), max(points[0::2]), max(points[1::2])
     width, height = x_max - x_min, y_max - y_min
     x_center, y_center = (x_min + x_max) / 2, (y_min + y_max) / 2
@@ -243,5 +242,6 @@ def filter_classes(image_path: str, annotation_path: str, dst_path: str,  class_
                 if (cls in class_ids) and j:
                     j = False
                     i += 1
+                    print(f'filtering for {ann_file_path}')
                     create_data(img_file_path, ann_file_path, dst_path, class_ids)
             j = True
