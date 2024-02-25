@@ -159,7 +159,6 @@ def seg_to_bbox(seg_info):
 
 
 def get_box_from_yolo(image_shape, yolo_box):
-    print(f'\tyolo box: {yolo_box}')
     height, width = image_shape
     x, y, w, h = yolo_box
     box_width = width * w
@@ -181,7 +180,6 @@ def overlay_boxes(image, bounding_boxes: List[Dict]):
         label = str(box['label'])
         bbox = box['bbox']
         bbox = get_box_from_yolo((height, width), bbox)
-        print(f"\tbbox: {bbox}")
         start = int(bbox[0]), int(bbox[1])
         end = int(bbox[2]), int(bbox[3])
         origin = (start[0] - 15, start[1] - 15)
@@ -192,7 +190,6 @@ def overlay_boxes(image, bounding_boxes: List[Dict]):
 
 
 def draw_bounding_boxes(image_path, label_path):
-    # print(image_path, '\t', label_path)
     image = cv2.imread(image_path)
     box_info = []
     if not os.path.exists(label_path):
@@ -207,7 +204,35 @@ def draw_bounding_boxes(image_path, label_path):
             box['bbox'] = yolo_bbox[1:]
             box_info.append(box)
     drawn = overlay_boxes(image, box_info)
-    cv2.imshow('image', drawn)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    # return drawn
+    return drawn
+
+
+def create_data(image_path: str, label_path: str, dst_dir: str, class_ids) -> None:
+    dst_img_path = os.path.join(dst_dir, 'images')
+    if not os.path.exists(dst_img_path):
+        os.makedirs(dst_img_path)
+    dst_label_path = os.path.join(dst_dir, 'labels')
+    if not os.path.exists(dst_label_path):
+        os.makedirs(dst_label_path)
+
+    shutil.copy2(image_path, dst_img_path)
+    src_ann = open(label_path, 'r')
+    dst_ann_file = open(os.path.join(dst_label_path, ), 'w')
+
+def filter_classes(image_path: str, annotation_path: str, dst_path: str,  class_ids: list) -> None:
+    i = 0
+    for annotation_file in os.listdir(annotation_path):
+        ann_file_path = os.path.join(annotation_path, annotation_file)
+        img_file_name = os.path.splitext(annotation_file)[0] + '.jpg'
+        img_file_path = os.path.join(image_path, img_file_name)
+        with open(ann_file_path, 'r') as ann:
+            lines = ann.read().splitlines()
+            j = True
+            for line in lines:
+                line_ = line.split()
+                cls = int(line_[0])
+                if (cls in class_ids) and j:
+                    j = False
+                    i += 1
+                    print(img_file_path)
+            j = True
