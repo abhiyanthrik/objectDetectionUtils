@@ -1,9 +1,12 @@
 import os
+import random
 import shutil
 import xml.etree.ElementTree as ETree
-from typing import List
-import random
+from typing import List, Dict
 from xml.etree.ElementTree import Element
+
+import cv2
+
 classes = ['pistol', 'knife']
 
 
@@ -144,16 +147,67 @@ def voc2yolo(src_dir, dest_dir):
                 move_content(src_content_path, dst_content_path)
 
 
-def overlay_boxes(image, bounding_boxes):
-    # I'll Update it soon
-    pass
+def seg_to_bbox(seg_info):
+    class_id, points = seg_info[0], seg_info[1:]
+    points = [float(p) for p in points]
+    # print(points)
+    x_min, y_min, x_max, y_max = min(points[0::2]), min(points[1::2]), max(points[0::2]), max(points[1::2])
+    width, height = x_max - x_min, y_max - y_min
+    x_center, y_center = (x_min + x_max) / 2, (y_min + y_max) / 2
+    bbox_info = int(class_id), x_center, y_center, width, height
+    return bbox_info
 
 
-def get_box_from_yolo(image_src, label_src):
-    # I'll update it soon
-    pass
+def get_box_from_yolo(image_shape, yolo_box):
+    print(f'\tyolo box: {yolo_box}')
+    height, width = image_shape
+    x, y, w, h = yolo_box
+    box_width = width * w
+    box_height = height * h
+    x *= width
+    y *= height
+    x0 = x - box_width / 2
+    x1 = x0 + box_width
+    y0 = y - box_height / 2
+    y1 = y0 + box_height
+    return x0, y0, x1, y1
+
+
+def overlay_boxes(image, bounding_boxes: List[Dict]):
+
+    height, width = image.shape[0], image.shape[1]
+    print(f"height: {height}, width: {width}")
+    for box in bounding_boxes:
+        label = str(box['label'])
+        bbox = box['bbox']
+        bbox = get_box_from_yolo((height, width), bbox)
+        print(f"\tbbox: {bbox}")
+        start = int(bbox[0]), int(bbox[1])
+        end = int(bbox[2]), int(bbox[3])
+        origin = (start[0] - 15, start[1] - 15)
+        image = cv2.rectangle(image, start, end, (0, 0, 255), 2)
+        image = cv2.putText(image, label, origin, cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            (0,0, 255), 2, cv2.LINE_AA)
+    return image
 
 
 def draw_bounding_boxes(image_path, label_path):
-    # I'll update it soon
-    pass
+    # print(image_path, '\t', label_path)
+    image = cv2.imread(image_path)
+    box_info = []
+    if not os.path.exists(label_path):
+        with open(label_path, 'w') as _:
+            pass
+    with open(label_path, 'r') as label_file:
+        lines = label_file.read().splitlines()
+        for line in lines:
+            box = {}
+            yolo_bbox = seg_to_bbox(line.split())
+            box['label'] = yolo_bbox[0]
+            box['bbox'] = yolo_bbox[1:]
+            box_info.append(box)
+    drawn = overlay_boxes(image, box_info)
+    cv2.imshow('image', drawn)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    # return drawn
