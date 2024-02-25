@@ -208,6 +208,7 @@ def draw_bounding_boxes(image_path, label_path):
 
 
 def create_data(image_path: str, label_path: str, dst_dir: str, class_ids) -> None:
+    file_name = os.path.basename(label_path)
     dst_img_path = os.path.join(dst_dir, 'images')
     if not os.path.exists(dst_img_path):
         os.makedirs(dst_img_path)
@@ -217,7 +218,15 @@ def create_data(image_path: str, label_path: str, dst_dir: str, class_ids) -> No
 
     shutil.copy2(image_path, dst_img_path)
     src_ann = open(label_path, 'r')
-    dst_ann_file = open(os.path.join(dst_label_path, ), 'w')
+    dst_ann_file = open(os.path.join(dst_label_path, file_name), 'w')
+    lines_of_interest = []
+    for line in src_ann.readlines():
+        line_ = line.split()
+        bbox = seg_to_bbox(line_)
+        bb = ' '.join([str(b) for b in bbox])
+        if bbox[0] in class_ids:
+            lines_of_interest.append(bb+'\n')
+    dst_ann_file.writelines(lines_of_interest)
 
 def filter_classes(image_path: str, annotation_path: str, dst_path: str,  class_ids: list) -> None:
     i = 0
@@ -234,5 +243,5 @@ def filter_classes(image_path: str, annotation_path: str, dst_path: str,  class_
                 if (cls in class_ids) and j:
                     j = False
                     i += 1
-                    print(img_file_path)
+                    create_data(img_file_path, ann_file_path, dst_path, class_ids)
             j = True
