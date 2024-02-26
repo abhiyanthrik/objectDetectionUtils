@@ -154,6 +154,7 @@ def seg_to_bbox(seg_info):
     width, height = x_max - x_min, y_max - y_min
     x_center, y_center = (x_min + x_max) / 2, (y_min + y_max) / 2
     bbox_info = int(class_id), x_center, y_center, width, height
+    # bbox_info = 1, x_center, y_center, width, height
     return bbox_info
 
 
@@ -221,14 +222,14 @@ def create_data(image_path: str, label_path: str, dst_dir: str, class_ids) -> No
     lines_of_interest = []
     for line in src_ann.readlines():
         line_ = line.split()
-        bbox = seg_to_bbox(line_)
-        bb = ' '.join([str(b) for b in bbox])
+        bbox = list(seg_to_bbox(line_))
         if bbox[0] in class_ids:
+            bbox[0] = 1
+            bb = ' '.join([str(b) for b in bbox])
             lines_of_interest.append(bb+'\n')
     dst_ann_file.writelines(lines_of_interest)
 
 def filter_classes(image_path: str, annotation_path: str, dst_path: str,  class_ids: list) -> None:
-    i = 0
     for annotation_file in os.listdir(annotation_path):
         ann_file_path = os.path.join(annotation_path, annotation_file)
         img_file_name = os.path.splitext(annotation_file)[0] + '.jpg'
@@ -241,7 +242,6 @@ def filter_classes(image_path: str, annotation_path: str, dst_path: str,  class_
                 cls = int(line_[0])
                 if (cls in class_ids) and j:
                     j = False
-                    i += 1
                     print(f'filtering for {ann_file_path}')
                     create_data(img_file_path, ann_file_path, dst_path, class_ids)
             j = True
