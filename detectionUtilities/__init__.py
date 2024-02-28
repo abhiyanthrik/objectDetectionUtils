@@ -147,6 +147,16 @@ def voc2yolo(src_dir, dest_dir):
                 move_content(src_content_path, dst_content_path)
 
 
+def voc2yolo_single(src_dir, dest_dir):
+    for content in os.listdir(src_dir):
+        src_content_path = os.path.join(src_dir, content)
+        dst_content_path = os.path.join(dest_dir, content)
+        if 'image' in content.lower():
+            copy_files(src_content_path, dst_content_path)
+        elif 'label' in content.lower():
+            move_content(src_content_path, dst_content_path)
+
+
 def seg_to_bbox(seg_info):
     class_id, points = seg_info[0], seg_info[1:]
     points = [float(p) for p in points]
@@ -222,12 +232,14 @@ def create_data(image_path: str, label_path: str, dst_dir: str, class_ids) -> No
     lines_of_interest = []
     for line in src_ann.readlines():
         line_ = line.split()
-        bbox = list(seg_to_bbox(line_))
-        if bbox[0] in class_ids:
-            bbox[0] = 1
-            bb = ' '.join([str(b) for b in bbox])
+        line_[0] = int(line_[0])
+        # bbox = list(seg_to_bbox(line_))
+        if line_[0] in class_ids:
+            line_[0] = "1"
+            bb = ' '.join(line_)
             lines_of_interest.append(bb+'\n')
     dst_ann_file.writelines(lines_of_interest)
+
 
 def filter_classes(image_path: str, annotation_path: str, dst_path: str,  class_ids: list) -> None:
     for annotation_file in os.listdir(annotation_path):
