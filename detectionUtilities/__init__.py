@@ -248,12 +248,58 @@ def filter_classes(image_path: str, annotation_path: str, dst_path: str,  class_
         img_file_path = os.path.join(image_path, img_file_name)
         with open(ann_file_path, 'r') as ann:
             lines = ann.read().splitlines()
-            j = True
             for line in lines:
                 line_ = line.split()
                 cls = int(line_[0])
-                if (cls in class_ids) and j:
-                    j = False
+                if cls in class_ids:
                     print(f'filtering for {ann_file_path}')
                     create_data(img_file_path, ann_file_path, dst_path, class_ids)
-            j = True
+                    break
+
+
+def delete_data(img_path: str, ann_path: str, dst_path: str, cls_ids: list) -> None:
+    file_name = os.path.basename(ann_path)
+    dst_img_path = os.path.join(dst_path, 'images')
+    if not os.path.exists(dst_img_path):
+        os.makedirs(dst_img_path)
+    dst_label_path = os.path.join(dst_path, 'labels')
+    if not os.path.exists(dst_label_path):
+        os.makedirs(dst_label_path)
+
+    shutil.copy2(img_path, dst_img_path)
+
+    src_ann = open(ann_path, 'r')
+    dst_ann_file = open(os.path.join(dst_label_path, file_name), 'w')
+    lines_of_interest = []
+    for line in src_ann.readlines():
+        line_ = line.split()
+        cls_id = int(line_[0])
+        if cls_id in cls_ids:
+            continue
+        if cls_id == 2:
+            line_[0] = '1'
+        bb = ' '.join(line_)
+        lines_of_interest.append(bb + '\n')
+    dst_ann_file.writelines(lines_of_interest)
+
+
+def delete_classes(image_path: str, annotation_path: str, dst_path: str,  class_ids: list) -> None:
+    for annotation_file in os.listdir(annotation_path):
+        ann_file_path = os.path.join(annotation_path, annotation_file)
+        img_file_name = os.path.splitext(annotation_file)[0] + '.jpg'
+        img_file_path = os.path.join(image_path, img_file_name)
+        delete_data(img_file_path, ann_file_path, dst_path, class_ids)
+
+
+def validate_annotations(annotation_path: str):
+    cls_of_interest = [0, 1]
+    for ann_file in os.listdir(annotation_path):
+        ann_file = os.path.join(annotation_path, ann_file)
+        with open(ann_file, 'r') as f:
+            lines = f.readlines()
+            if not lines:
+                print("Empty file")
+            for line in lines:
+                line = line.split()
+                if int(line[0]) not in cls_of_interest:
+                    print(f"Invalid annotation file: {ann_file}")
