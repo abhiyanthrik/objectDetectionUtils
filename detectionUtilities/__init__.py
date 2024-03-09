@@ -291,6 +291,30 @@ def delete_classes(image_path: str, annotation_path: str, dst_path: str,  class_
         delete_data(img_file_path, ann_file_path, dst_path, class_ids)
 
 
+def filter_unannotated(image_path: str, annotation_path: str, dst_path: str):
+    images = os.listdir(image_path)
+    if not os.path.exists(dst_path):
+        os.makedirs(dst_path, exist_ok=True)
+    for img in images:
+        img_path = os.path.join(image_path, img)
+        label_path = os.path.join(annotation_path, f"{os.path.splitext(img)[0]}.txt")
+        if not os.path.exists(label_path):
+            print(f"Copying file {img_path} to {dst_path}")
+            shutil.copy2(img_path, dst_path)
+            # print(img_path)
+
+
+def create_empty_annotations(image_path: str, annotation_path: str):
+    images = os.listdir(image_path)
+    for img in images:
+        img_path = os.path.join(image_path, img)
+        label_path = os.path.join(annotation_path, f"{os.path.splitext(img)[0]}.txt")
+        if not os.path.exists(label_path):
+            print(f"creating label file {label_path}")
+            with open(label_path, 'w') as _:
+                pass
+
+
 def validate_annotations(annotation_path: str):
     cls_of_interest = [0, 1]
     for ann_file in os.listdir(annotation_path):
