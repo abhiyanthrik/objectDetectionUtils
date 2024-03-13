@@ -1,3 +1,4 @@
+import json
 import os
 import random
 import shutil
@@ -68,7 +69,7 @@ def merge_data(src_paths: List[str], dst_path: str):
         for root, dirs, files in os.walk(src_path):
             for file in files:
                 file_abs_path = os.path.join(root, file)
-                file_rel_path = file_abs_path.replace(src_path+'/', '')
+                file_rel_path = file_abs_path.replace(src_path + '/', '')
                 dest_path = "/".join(os.path.join(dst_path, file_rel_path).split('/')[:-1])
                 if not os.path.exists(dest_path):
                     os.makedirs(dest_path)
@@ -158,13 +159,12 @@ def voc2yolo_single(src_dir, dest_dir):
 
 
 def seg_to_bbox(seg_info):
-    class_id, points = seg_info[0], seg_info[1:]
+    points = seg_info[1:]
     points = [float(p) for p in points]
     x_min, y_min, x_max, y_max = min(points[0::2]), min(points[1::2]), max(points[0::2]), max(points[1::2])
     width, height = x_max - x_min, y_max - y_min
     x_center, y_center = (x_min + x_max) / 2, (y_min + y_max) / 2
-    bbox_info = int(class_id), x_center, y_center, width, height
-    # bbox_info = 1, x_center, y_center, width, height
+    bbox_info = x_center, y_center, width, height
     return bbox_info
 
 
@@ -183,7 +183,6 @@ def get_box_from_yolo(image_shape, yolo_box):
 
 
 def overlay_boxes(image, bounding_boxes: List[Dict]):
-
     height, width = image.shape[0], image.shape[1]
     print(f"height: {height}, width: {width}")
     for box in bounding_boxes:
@@ -195,7 +194,7 @@ def overlay_boxes(image, bounding_boxes: List[Dict]):
         origin = (start[0] - 15, start[1] - 15)
         image = cv2.rectangle(image, start, end, (0, 0, 255), 2)
         image = cv2.putText(image, label, origin, cv2.FONT_HERSHEY_SIMPLEX, 1,
-                            (0,0, 255), 2, cv2.LINE_AA)
+                            (0, 0, 255), 2, cv2.LINE_AA)
     return image
 
 
@@ -232,20 +231,45 @@ def create_data(image_path: str, label_path: str, dst_dir: str, class_ids) -> No
     lines_of_interest = []
     for line in src_ann.readlines():
         line_ = line.split()
-        line_[0] = int(line_[0])
+        cls_id = int(line_[0])
         # bbox = list(seg_to_bbox(line_))
-        if line_[0] in class_ids:
-            line_[0] = "1"
+        if cls_id in class_ids:
+            line_[0] = str(class_ids.index(cls_id))
             bb = ' '.join(line_)
-            lines_of_interest.append(bb+'\n')
+            lines_of_interest.append(bb + '\n')
     dst_ann_file.writelines(lines_of_interest)
 
 
-def filter_classes(image_path: str, annotation_path: str, dst_path: str,  class_ids: list) -> None:
+def filter_classes(src_path: str, dst_path: str, class_names: List[str]) -> None:
+    if os.path.exists(dst_path):
+        print("Destination Directory already exist...\nPlease chose a different name.")
+        return
+    os.makedirs(dst_path, exist_ok=True)
+    annotation_path = os.path.join(src_path, 'labels')
+    image_path = os.path.join(src_path, 'images')
+    metadata_path = os.path.join(src_path, 'data.yaml')
+    metadata_file = open(metadata_path, 'r')
+    original_classes = json.load(metadata_file)['nc']
+    metadata_file.close()
+    class_ids = []
+    for cls in class_names:
+        if cls not in original_classes:
+            print('Class {} not found in original classes. Please choose a valid class.'.format(cls))
+            return
+        class_ids.append(original_classes.index(cls))
+    new_metadata = {
+        'path': dst_path,
+        'nc': [original_classes[i] for i in class_ids]
+    }
+    new_metadata_filename = os.path.join(dst_path, 'data.yaml')
+    with open(new_metadata_filename, 'w') as f:
+        json.dump(new_metadata, f)
+
     for annotation_file in os.listdir(annotation_path):
         ann_file_path = os.path.join(annotation_path, annotation_file)
         img_file_name = os.path.splitext(annotation_file)[0] + '.jpg'
         img_file_path = os.path.join(image_path, img_file_name)
+
         with open(ann_file_path, 'r') as ann:
             lines = ann.read().splitlines()
             for line in lines:
@@ -283,7 +307,7 @@ def delete_data(img_path: str, ann_path: str, dst_path: str, cls_ids: list) -> N
     dst_ann_file.writelines(lines_of_interest)
 
 
-def delete_classes(image_path: str, annotation_path: str, dst_path: str,  class_ids: list) -> None:
+def delete_classes(image_path: str, annotation_path: str, dst_path: str, class_ids: list) -> None:
     for annotation_file in os.listdir(annotation_path):
         ann_file_path = os.path.join(annotation_path, annotation_file)
         img_file_name = os.path.splitext(annotation_file)[0] + '.jpg'
@@ -316,7 +340,7 @@ def create_empty_annotations(image_path: str, annotation_path: str):
 
 
 def validate_annotations(annotation_path: str):
-    cls_of_interest = [0, 1]
+    cls_of_interest = [0]
     for ann_file in os.listdir(annotation_path):
         ann_file = os.path.join(annotation_path, ann_file)
         with open(ann_file, 'r') as f:
