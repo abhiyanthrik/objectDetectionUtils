@@ -170,12 +170,12 @@ def voc2yolo_single(src_dir, dest_dir):
 
 
 def seg_to_bbox(seg_info):
+    class_id = seg_info[0]
     points = seg_info[1:]
-    points = [float(p) for p in points]
     x_min, y_min, x_max, y_max = min(points[0::2]), min(points[1::2]), max(points[0::2]), max(points[1::2])
     width, height = x_max - x_min, y_max - y_min
     x_center, y_center = (x_min + x_max) / 2, (y_min + y_max) / 2
-    bbox_info = x_center, y_center, width, height
+    bbox_info = class_id, x_center, y_center, width, height
     return bbox_info
 
 
@@ -195,7 +195,6 @@ def get_box_from_yolo(image_shape, yolo_box):
 
 def overlay_boxes(image, bounding_boxes: List[Dict]):
     height, width = image.shape[0], image.shape[1]
-    print(f"height: {height}, width: {width}")
     for box in bounding_boxes:
         label = str(box['label'])
         bbox = box['bbox']
@@ -209,19 +208,25 @@ def overlay_boxes(image, bounding_boxes: List[Dict]):
     return image
 
 
-def draw_bounding_boxes(image_path, label_path):
+def draw_bounding_boxes(image_path, label_path, segmented=False):
     image = cv2.imread(image_path)
     box_info = []
     if not os.path.exists(label_path):
         with open(label_path, 'w') as _:
-            pass
+            ...
     with open(label_path, 'r') as label_file:
         lines = label_file.read().splitlines()
         for line in lines:
             box = {}
-            yolo_bbox = seg_to_bbox(line.split())
-            box['label'] = yolo_bbox[0]
-            box['bbox'] = yolo_bbox[1:]
+            annotation = line.split()
+            annotation[0] = int(annotation[0])
+            annotation[1:] = [float(a) for a in annotation[1:]]
+            if segmented:
+                annotation = seg_to_bbox(annotation)
+            # print(line)
+            # print(annotation, '\n')
+            box['label'] = annotation[0]
+            box['bbox'] = annotation[1:]
             box_info.append(box)
     drawn = overlay_boxes(image, box_info)
     return drawn
@@ -463,11 +468,9 @@ def combine_datasets(dataset_path: str) -> None:
 
 
 def combine_data_v2(dataset_path: str) -> None:
-    combined_data_path = f'{dataset_path}-combined'
-    if os.listdir(combined_data_path):
-        print(f"The Path: {combined_data_path} is not empty, please check content and remove them")
     weapon_classes = ['weapon', 'dangerous weapon', 'Pistol', 'knife', 'Knife', 'pistol', 'rifle']
     human_classes = ['criminal', 'person', 'Person', 'victim']
+    combined_data_path = f'{dataset_path}-combined'
     data_dirs = os.listdir(dataset_path)
     for data_dir in data_dirs:
         data_path = os.path.join(dataset_path, data_dir)
@@ -487,36 +490,69 @@ def combine_data_v2(dataset_path: str) -> None:
         images_path = os.path.join(data_path, 'images')
         labels_path = os.path.join(data_path, 'labels')
 
-        dest_paths = {
+        dest_dirs = {
             directory: os.path.join(combined_data_path, directory)
             for flag, directory in zip([person, weaponry], ["person", "weaponry"])
             if flag
         }
-        for destination in dest_paths:
-            os.makedirs(dest_paths[destination], exist_ok=True)
+        class_wise_destinations = {
+            key: {
+                sub_dir: os.path.join(dest_dirs[key], sub_dir)
+                for sub_dir in "images labels".split()
+            }
+            for key in dest_dirs.keys()
+        }
 
-        # dest_images_path = os.path.join(combined_data_path, 'images')
-        # dest_labels_path = os.path.join(combined_data_path, 'labels')
-        #
-        # os.makedirs(dest_images_path, exist_ok=True)
-        # os.makedirs(dest_labels_path, exist_ok=True)
-        #
-        # image_list = os.listdir(images_path)
-        # for image in image_list:
-        #     image_name = os.path.splitext(image)[0]
-        #     src_image_path = os.path.join(images_path, image)
-        #     print(f"Copying image {image} to {dest_images_path}")
-        #     shutil.copy2(src_image_path, dest_images_path)
-        #
-        #     label_name = f"{image_name}.txt"
-        #     src_label_path = os.path.join(labels_path, label_name)
-        #     dest_label_path = os.path.join(dest_labels_path, label_name)
-        #     with open(src_label_path, 'r') as original_annotation:
-        #         annotations = original_annotation.readlines()
-        #     annotations = [annotation.split() for annotation in annotations]
-        #     for annotation in annotations:
-        #         annotation[0] = str(combined_classes[classes[int(annotation[0])]])
-        #     annotations = [' '.join(annotation) for annotation in annotations]
-        #     annotations = '\n'.join(annotations)
-        #     with open(dest_label_path, 'w') as final_annotation:
-        #         final_annotation.write(annotations)
+        for class_destination in class_wise_destinations:
+            for sub_dest in class_wise_destinations[class_destination]:
+                sub_dest = class_wise_destinations[class_destination][sub_dest]
+                if not os.path.exists(sub_dest):
+                    print(f"Creating {sub_dest}")
+                    os.makedirs(sub_dest, exist_ok=True)
+
+        for label_file in os.listdir(labels_path):
+            file_name = os.path.splitext(label_file)[0]
+            label_path = os.path.join(labels_path, label_file)
+
+            image_path = os.path.join(images_path, f"{file_name}.jpg")
+
+            belong_h = False
+            belong_w = False
+
+            dest_labels = {
+                "weapon": [],
+                "person": [],
+            }
+            annotations = None
+
+            with open(label_path, 'r') as original_annotation:
+                annotations = original_annotation.readlines()
+
+            for annotation in annotations:
+                annotation_list = annotation.split()
+                cls_id = int(annotation_list[0])
+                class_name = classes[cls_id]
+                annotation_list[0] = str(0)
+                annotation = " ".join(annotation_list)
+                if class_name in weapon_classes:
+                    belong_w = True
+                    dest_labels['weapon'].append(annotation)
+                if class_name in human_classes:
+                    belong_h = True
+                    dest_labels['person'].append(annotation)
+            if belong_h:
+                image_destination = class_wise_destinations["person"]["images"]
+                label_path = class_wise_destinations["person"]["labels"]
+                label_destination = os.path.join(label_path, label_file)
+                shutil.copy(image_path, image_destination)
+                annotations = '\n'.join(dest_labels['person'])
+                with open(label_destination, 'w') as final_annotation:
+                    final_annotation.write(annotations)
+            if belong_w:
+                image_destination = class_wise_destinations["weaponry"]["images"]
+                label_path = class_wise_destinations["weaponry"]["labels"]
+                label_destination = os.path.join(label_path, label_file)
+                shutil.copy(image_path, image_destination)
+                annotations = '\n'.join(dest_labels['weapon'])
+                with open(label_destination, 'w') as final_annotation:
+                    final_annotation.write(annotations)
