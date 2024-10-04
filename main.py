@@ -1,10 +1,7 @@
 import os
-from detectionUtilities import filter_classes, validate_annotations
 
+from detectionUtilities.preprocessing import frame_segregation
 
 if __name__ == '__main__':
-    src_path = '/home/s2p/Documents/COCO/folders/dataset-copy'
-    dst_path = '/home/s2p/Documents/COCO/folders/person-filtered'
-    classes = ['person']
-    filter_classes(src_path, dst_path, classes)
-    validate_annotations("/home/s2p/Documents/COCO/folders/dataset-filtered/labels")
+    src_path = "/home/rv/Documents/datasets/traffic/custom/hiv00031-frames"
+    frame_segregation(src_path)

@@ -1,1 +1,6 @@
 opencv-python~=4.9.0.80
+
+PyYAML~=6.0.2
+ultralytics~=8.2.101
+numpy~=1.26.4
+scipy~=1.14.1

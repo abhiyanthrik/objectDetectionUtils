@@ -1,3 +1,4 @@
+import yaml
 import json
 import os
 import random
@@ -8,7 +9,7 @@ from xml.etree.ElementTree import Element
 
 import cv2
 
-classes = ['pistol', 'knife']
+classes = ['autorickshaw', 'knife']
 
 
 def create_dataset(root_dir: str, data_format: str = 'coco', splits: (float, float) = (0.2, 0.05)):
@@ -97,14 +98,24 @@ def normalize_bounding_boxes(size, bounding_boxes):
 
 
 def get_bounding_boxes(xml_root: Element):
+    classes = {
+        'autorickshaw': 0,
+        'tractor': 1,
+        'truck': 2,
+        'Rikshaw': 3,
+        'Rickshaw': 3,
+        'rikshaw': 3
+    }
     w, h = [int(xml_root.find('size').find(tag).text) for tag in ('width', 'height')]
     boxes = {}
     for obj in xml_root.iter('object'):
         difficult = obj.find('difficult').text
         cls = obj.find('name').text
-        if cls not in classes or int(difficult) == 1:
+        print('\t', cls)
+        if cls not in classes.keys() or int(difficult) == 1:
             continue
-        cls_id = classes.index(cls)
+
+        cls_id = classes[cls]
         xml_box = obj.find('bndbox')
         bounding_box = [float(xml_box.find(tag).text) for tag in ('xmin', 'xmax', 'ymin', 'ymax')]
         normalized_bounding_box = normalize_bounding_boxes((w, h), bounding_box)
@@ -351,3 +362,161 @@ def validate_annotations(annotation_path: str):
                 line = line.split()
                 if int(line[0]) not in cls_of_interest:
                     print(f"Invalid annotation file: {ann_file}")
+
+
+def segregate_xml_from_images(dataset_path: str) -> None:
+    dataset = {i: os.path.join(f'{dataset_path}-sagregated', i) for i in ("images", "annotations")}
+    for d in dataset.values():
+        print(os.path.join(dataset_path, d))
+        os.makedirs(os.path.join(dataset_path, d), exist_ok=True)
+
+    for file in os.listdir(dataset_path):
+        src_file_path = os.path.join(dataset_path, file)
+        if file.endswith(".xml"):
+            dst_path = os.path.join(dataset['annotations'], file)
+            print(f"Moving: {file} to {dataset['annotations']}")
+            shutil.move(src_file_path, dst_path)
+            # print(f"src: {src_file_path}")
+            # print(f"dst: {dst_path}\n")
+        else:
+            dst_path = os.path.join(dataset['images'], file)
+            print(f"Moving: {file} to {dataset['images']}")
+            shutil.move(src_file_path, dst_path)
+            # print(f"src: {src_file_path}")
+            # print(f"dst: {dst_path}\n")
+
+
+def classes_from_voc(dataset_path: str):
+    classes = []
+    data_dirs = os.listdir(dataset_path)
+    for data_dir in data_dirs:
+        label_path = os.path.join(dataset_path, data_dir, 'labels')
+        if not os.path.exists(label_path):
+            print(f"The Path: {label_path} not found")
+            continue
+        label_files = os.listdir(label_path)
+        for label_file in label_files:
+            file_path = os.path.join(label_path, label_file)
+            if os.path.isdir(file_path):
+                print(f"Skipping {label_file} [It's a directory]")
+                continue
+            with open(file_path, 'r') as f:
+                tree = ETree.parse(f)
+                root = tree.getroot()
+                for obj in root.iter('object'):
+                    cls = obj.find('name').text
+                    if cls not in classes:
+                        classes.append(cls)
+    return classes
+
+
+def combine_datasets(dataset_path: str) -> None:
+    combined_data_path = f'{dataset_path}-combined'
+    if not os.path.exists(combined_data_path):
+        os.makedirs(combined_data_path, exist_ok=True)
+    if os.listdir(combined_data_path):
+        print(f"The Path: {combined_data_path} is not empty, please check content and remove them")
+    combined_classes = dict()
+    weapon_classes = ['weapon', 'dangerous weapon', 'Pistol', 'knife', 'Knife', 'pistol', 'rifle']
+    human_classes = ['criminal', 'person', 'Person', 'victim']
+    data_dirs = os.listdir(dataset_path)
+    for data_dir in data_dirs:
+        data_path = os.path.join(dataset_path, data_dir)
+        meta_file = os.path.join(data_path, 'data.yaml')
+        with open(meta_file, 'r') as f:
+            classes = yaml.safe_load(f)['names']
+        for cls in classes:
+            if cls not in combined_classes:
+                combined_classes[cls] = len(combined_classes)
+        # images_path = os.path.join(data_path, 'images')
+        # labels_path = os.path.join(data_path, 'labels')
+        #
+        # dest_images_path = os.path.join(combined_data_path, 'images')
+        # dest_labels_path = os.path.join(combined_data_path, 'labels')
+        #
+        # os.makedirs(dest_images_path, exist_ok=True)
+        # os.makedirs(dest_labels_path, exist_ok=True)
+        #
+        # image_list = os.listdir(images_path)
+        # for image in image_list:
+        #     image_name = os.path.splitext(image)[0]
+        #     src_image_path = os.path.join(images_path, image)
+        #     print(f"Copying image {image} to {dest_images_path}")
+        #     shutil.copy2(src_image_path, dest_images_path)
+        #
+        #     label_name = f"{image_name}.txt"
+        #     src_label_path = os.path.join(labels_path, label_name)
+        #     dest_label_path = os.path.join(dest_labels_path, label_name)
+        #     with open(src_label_path, 'r') as original_annotation:
+        #         annotations = original_annotation.readlines()
+        #     annotations = [annotation.split() for annotation in annotations]
+        #     for annotation in annotations:
+        #         annotation[0] = str(combined_classes[classes[int(annotation[0])]])
+        #     annotations = [' '.join(annotation) for annotation in annotations]
+        #     annotations = '\n'.join(annotations)
+        #     with open(dest_label_path, 'w') as final_annotation:
+        #         final_annotation.write(annotations)
+
+    combined_cls = [None] * len(combined_classes)
+    for cls in combined_classes:
+        combined_cls[combined_classes[cls]] = cls
+
+
+def combine_data_v2(dataset_path: str) -> None:
+    combined_data_path = f'{dataset_path}-combined'
+    if os.listdir(combined_data_path):
+        print(f"The Path: {combined_data_path} is not empty, please check content and remove them")
+    weapon_classes = ['weapon', 'dangerous weapon', 'Pistol', 'knife', 'Knife', 'pistol', 'rifle']
+    human_classes = ['criminal', 'person', 'Person', 'victim']
+    data_dirs = os.listdir(dataset_path)
+    for data_dir in data_dirs:
+        data_path = os.path.join(dataset_path, data_dir)
+        meta_file = os.path.join(data_path, 'data.yaml')
+
+        weaponry = False
+        person = False
+
+        with open(meta_file, 'r') as f:
+            classes = yaml.safe_load(f)['names']
+        for cls in classes:
+            if cls in weapon_classes:
+                weaponry = True
+            if cls in human_classes:
+                person = True
+
+        images_path = os.path.join(data_path, 'images')
+        labels_path = os.path.join(data_path, 'labels')
+
+        dest_paths = {
+            directory: os.path.join(combined_data_path, directory)
+            for flag, directory in zip([person, weaponry], ["person", "weaponry"])
+            if flag
+        }
+        for destination in dest_paths:
+            os.makedirs(dest_paths[destination], exist_ok=True)
+
+        # dest_images_path = os.path.join(combined_data_path, 'images')
+        # dest_labels_path = os.path.join(combined_data_path, 'labels')
+        #
+        # os.makedirs(dest_images_path, exist_ok=True)
+        # os.makedirs(dest_labels_path, exist_ok=True)
+        #
+        # image_list = os.listdir(images_path)
+        # for image in image_list:
+        #     image_name = os.path.splitext(image)[0]
+        #     src_image_path = os.path.join(images_path, image)
+        #     print(f"Copying image {image} to {dest_images_path}")
+        #     shutil.copy2(src_image_path, dest_images_path)
+        #
+        #     label_name = f"{image_name}.txt"
+        #     src_label_path = os.path.join(labels_path, label_name)
+        #     dest_label_path = os.path.join(dest_labels_path, label_name)
+        #     with open(src_label_path, 'r') as original_annotation:
+        #         annotations = original_annotation.readlines()
+        #     annotations = [annotation.split() for annotation in annotations]
+        #     for annotation in annotations:
+        #         annotation[0] = str(combined_classes[classes[int(annotation[0])]])
+        #     annotations = [' '.join(annotation) for annotation in annotations]
+        #     annotations = '\n'.join(annotations)
+        #     with open(dest_label_path, 'w') as final_annotation:
+        #         final_annotation.write(annotations)
